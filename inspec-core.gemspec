@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "rubyzip",            ">= 1.2.2", "< 3.0"
   spec.add_dependency "rspec",              ">= 3.9", "<= 3.11"
   spec.add_dependency "rspec-its",          "~> 1.2"
-  spec.add_dependency "pry",                "~> 0.13"
+  spec.add_dependency "irb",                "~> 1.4"
   spec.add_dependency "hashie",             ">= 3.4", "< 5.0"
   spec.add_dependency "mixlib-log",         "~> 3.0"
   spec.add_dependency "sslshake",           "~> 1.2"

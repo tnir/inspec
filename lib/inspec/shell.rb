@@ -1,8 +1,8 @@
-autoload :Pry, "pry"
+autoload :IRB, "irb"
 
 module Inspec
-  # A pry based shell for inspec. Given a runner (with a configured backend and
-  # all that jazz), this shell will produce a pry shell from which you can run
+  # An IRB based shell for inspec. Given a runner (with a configured backend and
+  # all that jazz), this shell will produce an IRB shell from which you can run
   # inspec/ruby commands that will be run within the context of the runner.
   class Shell
     def initialize(runner)
@@ -16,62 +16,59 @@ module Inspec
       # pretend like we are constantly appending to the same file and want
       # to capture the local variable context from inside said class.
       @ctx_binding = @runner.eval_with_virtual_profile("binding")
-      configure_pry
-      @ctx_binding.pry
+      configure_irb
+
+      # Add a help menu as the default intro
+      intro
+      print_target_info
+
+      @ctx_binding.irb
     end
 
-    def configure_pry # rubocop:disable Metrics/AbcSize
-      # Delete any before_session, before_eval, and after_eval hooks so we can
-      # replace them with our own. Pry 0.10 used to have a single method to clear
-      # all hooks, but this was removed in Pry 0.11.
-      %i{before_session before_eval after_eval}.each do |event|
-        Pry.hooks.get_hooks(event).keys.map { |hook| Pry.hooks.delete_hook(event, hook) }
-      end
+    def configure_irb # rubocop:disable Metrics/AbcSize
+      # # Delete any before_session, before_eval, and after_eval hooks so we can
+      # # replace them with our own. Pry 0.10 used to have a single method to clear
+      # # all hooks, but this was removed in Pry 0.11.
+      # %i{before_session before_eval after_eval}.each do |event|
+      #   Pry.hooks.get_hooks(event).keys.map { |hook| Pry.hooks.delete_hook(event, hook) }
+      # end
 
       that = self
 
       # Add the help command
-      Pry::Commands.block_command "help", "Show examples" do |resource|
-        that.help(resource)
-      end
+      IRB.conf[:IRB_RC] = Proc.new do
+        def help(resource = nil)
+          that.help(resource)
+        end
 
-      # configure pry shell prompt
-      Pry::Prompt.add(
-        :inspec,
-        "inspec custom prompt"
-      ) do |_context, _nesting, _pry_instance, _sep|
-        "#{readline_ignore("\e[1m\e[32m")}inspec> #{readline_ignore("\e[0m")}"
-      end
-      Pry.config.prompt = Pry::Prompt[:inspec]
-
-      # Add a help menu as the default intro
-      Pry.hooks.add_hook(:before_session, "inspec_intro") do
-        intro
-        print_target_info
-      end
-
-      # Track the rules currently registered and what their merge count is.
-      Pry.hooks.add_hook(:before_eval, "inspec_before_eval") do
         @runner.reset
-      end
 
-      # After pry has evaluated a commanding within the binding context of a
-      # test file, register all the rules it discovered.
-      Pry.hooks.add_hook(:after_eval, "inspec_after_eval") do
         @runner.load
         @runner.run_tests unless @runner.all_rules.empty?
       end
 
-      # Don't print out control class inspection when the user uses DSL methods.
-      # Instead produce a result of evaluating their control.
-      Pry.config.print = proc do |_output_, value, pry|
-        next unless @runner.all_rules.empty?
+      # configure IRB shell prompt
+      IRB.conf[:PROMPT] ||= {}
+      IRB.conf[:PROMPT][:INSPEC] = {
+        :AUTO_INDENT => true,
+        :PROMPT_I => "#{readline_ignore("\e[1m\e[32m")}inspec> #{readline_ignore("\e[0m")}",
+        :PROMPT_N => "#{readline_ignore("\e[1m\e[32m")}inspec> #{readline_ignore("\e[0m")}",
+        :PROMPT_S => "#{readline_ignore("\e[1m\e[32m")}inspec%l #{readline_ignore("\e[0m")}",
+        :PROMPT_C => "#{readline_ignore("\e[1m\e[32m")}inspec* #{readline_ignore("\e[0m")}",
+        :RETURN => "=> %s\n"
+      }
+      IRB.conf[:PROMPT_MODE] = :INSPEC
 
-        pry.pager.open do |pager|
-          pager.print pry.config.output_prefix
-          Pry::ColorPrinter.pp(value, pager, Pry::Output.new(pry).width - 1)
-        end
-      end
+      # # Don't print out control class inspection when the user uses DSL methods.
+      # # Instead produce a result of evaluating their control.
+      # Pry.config.print = proc do |_output_, value, pry|
+      #   next unless @runner.all_rules.empty?
+      #
+      #   pry.pager.open do |pager|
+      #     pager.print pry.config.output_prefix
+      #     Pry::ColorPrinter.pp(value, pager, Pry::Output.new(pry).width - 1)
+      #   end
+      # end
     end
 
     def readline_ignore(code)
